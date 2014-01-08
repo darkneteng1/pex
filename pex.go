@@ -375,11 +375,11 @@ func (self *PeerList) LoadBlacklistedPeerDatabase(dir string) error {
     for _, line := range lines {
         pts := strings.Split(line, " ")
         if len(pts) != 3 {
-            logInvalid(line, "Not of form <addr> <start> <duration>")
+            logInvalid(line, "Not of form $ADDR $BANSTART $BANDURATION")
             continue
         }
         addr := whitespaceFilter.ReplaceAllString(pts[0], "")
-        if addr == "" || addr[0] == "#" {
+        if addr == "" || strings.HasPrefix(addr, "#") {
             continue
         }
         start, err := strconv.ParseInt(pts[1], 10, 64)
