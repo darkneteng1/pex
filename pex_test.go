@@ -1,12 +1,9 @@
 package pex
 
 import (
-    "errors"
     "fmt"
     "github.com/stretchr/testify/assert"
     "net"
-    "net/http"
-    "net/http/httptest"
     "sort"
     "testing"
     "time"
@@ -82,19 +79,17 @@ func TestNewPex(t *testing.T) {
     assert.NotNil(t, p.Peerlist)
     assert.Equal(t, len(p.Peerlist), 0)
     assert.NotNil(t, p.Blacklist)
-    assert.NotNil(t, p.BootstrapEndpoints)
-    assert.Equal(t, len(p.BootstrapEndpoints), 0)
     assert.Equal(t, p.maxPeers, 10)
 }
 
-func TestAddBlacklist(t *testing.T) {
+func TestAddBlacklistEntry(t *testing.T) {
     p := NewPex(10)
     p.AddPeer(address)
     assert.NotNil(t, p.Peerlist[address])
     _, exists := p.Blacklist[address]
     assert.Equal(t, exists, false)
     duration := time.Minute * 9
-    p.AddBlacklist(p.Peerlist[address].Addr, duration)
+    p.AddBlacklistEntry(p.Peerlist[address].Addr, duration)
     assert.Nil(t, p.Peerlist[address])
     assert.Equal(t, p.Blacklist[address].Duration, duration)
     now := time.Now()
@@ -124,49 +119,6 @@ func TestSetMaxPeers(t *testing.T) {
         }
     }()
     p.SetMaxPeers(-1)
-}
-
-func TestAddBootstrapEndpoint(t *testing.T) {
-    p := NewPex(10)
-    assert.Equal(t, len(p.BootstrapEndpoints), 0)
-    endpoint := "http://example.com/peers.txt"
-    p.AddBootstrapEndpoint(endpoint)
-    assert.Equal(t, len(p.BootstrapEndpoints), 1)
-    assert.Equal(t, p.BootstrapEndpoints[0], endpoint)
-}
-
-func TestBootstrapPeers(t *testing.T) {
-    p := NewPex(10)
-    endpoint := "http://example.com/peers.txt"
-    p.AddBootstrapEndpoint(endpoint)
-
-    _x := extractPeersFromHttp
-
-    // Test working endpoint that returns peers
-    extractPeersFromHttp = func(e string) ([]string, error) {
-        return []string{"112.32.32.14:10011", "112.32.32.14:20011"}, nil
-    }
-    n := p.BootstrapPeers()
-    assert.Equal(t, n, 2)
-    assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
-    assert.NotNil(t, p.Peerlist["112.32.32.14:20011"])
-
-    // Test failed endpoint
-    extractPeersFromHttp = func(e string) ([]string, error) {
-        return nil, errors.New("bad")
-    }
-    n = p.BootstrapPeers()
-    assert.Equal(t, n, 0)
-
-    // Test failed AddPeer
-    p.SetMaxPeers(2)
-    extractPeersFromHttp = func(e string) ([]string, error) {
-        return []string{"112.32.32.14:30011"}, nil
-    }
-    n = p.BootstrapPeers()
-    assert.Equal(t, n, 0)
-
-    extractPeersFromHttp = _x
 }
 
 func TestRequestPeers(t *testing.T) {
@@ -221,15 +173,15 @@ func TestResponseToGetPeersMessage(t *testing.T) {
     dummyGiveSent = false
 }
 
-func TestClearOldPeers(t *testing.T) {
+func TestClearOld(t *testing.T) {
     p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
     p.AddPeer("112.32.32.14:20011")
     assert.Equal(t, len(p.Peerlist), 2)
-    p.ClearOldPeers(100)
+    p.Peerlist.ClearOld(100)
     assert.Equal(t, len(p.Peerlist), 2)
     p.Peerlist["112.32.32.14:20011"].LastSeen -= 101
-    p.ClearOldPeers(100)
+    p.Peerlist.ClearOld(100)
     assert.Equal(t, len(p.Peerlist), 1)
     assert.Nil(t, p.Peerlist["112.32.32.14:20011"])
     assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
@@ -370,31 +322,6 @@ func TestSaveLoad(t *testing.T) {
     assert.NotNil(t, q.Peerlist["112.32.32.14:20011"])
 
     // TODO -- any way to force os.Create or f.WriteString to return an error?
-}
-
-func TestExtractPeersFromHttp(t *testing.T) {
-    return_peers := func(w http.ResponseWriter, r *http.Request) {
-        fmt.Fprintln(w, "112.32.32.14:11111")
-        fmt.Fprintln(w, "112.32.32.14:22222")
-    }
-    ts := httptest.NewServer(http.HandlerFunc(return_peers))
-    defer ts.Close()
-
-    peers, err := extractPeersFromHttp(ts.URL)
-    assert.Nil(t, err)
-    sort.Strings(peers)
-    assert.Equal(t, peers, []string{
-        "112.32.32.14:11111",
-        "112.32.32.14:22222",
-    })
-
-    // test failing http.Get
-    peers, err = extractPeersFromHttp("")
-    assert.NotNil(t, err)
-
-    // test failing ioutil.ReadAll
-    // TODO -- how to force ioutil.ReadAll to return an error when reading the
-    // response Body?
 }
 
 /* Addendum: dummies & mocks */
