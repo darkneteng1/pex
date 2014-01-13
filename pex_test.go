@@ -14,53 +14,53 @@ import (
 
 var address string = "112.32.32.14:3030"
 
-func TestValidateIPString(t *testing.T) {
-    // empty string
-    assert.Equal(t, ValidateIPString(""), false)
+// empty string
+func TestValidateAddress(t *testing.T) {
+    assert.Equal(t, ValidateAddress(""), false)
     // doubled ip:port
-    assert.Equal(t, ValidateIPString("112.32.32.14:100112.32.32.14:101"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:100112.32.32.14:101"), false)
     // requires port
-    assert.Equal(t, ValidateIPString("112.32.32.14"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14"), false)
     // not ip
-    assert.Equal(t, ValidateIPString("112"), false)
-    assert.Equal(t, ValidateIPString("112.32"), false)
-    assert.Equal(t, ValidateIPString("112.32.32"), false)
+    assert.Equal(t, ValidateAddress("112"), false)
+    assert.Equal(t, ValidateAddress("112.32"), false)
+    assert.Equal(t, ValidateAddress("112.32.32"), false)
     // bad part
-    assert.Equal(t, ValidateIPString("112.32.32.14000"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14000"), false)
     // large port
-    assert.Equal(t, ValidateIPString("112.32.32.14:66666"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:66666"), false)
     // localhost
-    assert.Equal(t, ValidateIPString("127.0.0.1:8888"), false)
+    assert.Equal(t, ValidateAddress("127.0.0.1:8888"), false)
     // unspecified
-    assert.Equal(t, ValidateIPString("0.0.0.0:8888"), false)
+    assert.Equal(t, ValidateAddress("0.0.0.0:8888"), false)
     // no ip
-    assert.Equal(t, ValidateIPString(":8888"), false)
+    assert.Equal(t, ValidateAddress(":8888"), false)
     // multicast
-    assert.Equal(t, ValidateIPString("224.1.1.1:8888"), false)
+    assert.Equal(t, ValidateAddress("224.1.1.1:8888"), false)
     // invalid ports
-    assert.Equal(t, ValidateIPString("112.32.32.14:0"), false)
-    assert.Equal(t, ValidateIPString("112.32.32.14:1"), false)
-    assert.Equal(t, ValidateIPString("112.32.32.14:10"), false)
-    assert.Equal(t, ValidateIPString("112.32.32.14:100"), false)
-    assert.Equal(t, ValidateIPString("112.32.32.14:1000"), false)
-    assert.Equal(t, ValidateIPString("112.32.32.14:1023"), false)
-    assert.Equal(t, ValidateIPString("112.32.32.14:65536"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:0"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:1"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:10"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:100"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:1000"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:1023"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:65536"), false)
     // valid ones
-    assert.Equal(t, ValidateIPString("112.32.32.14:1024"), true)
-    assert.Equal(t, ValidateIPString("112.32.32.14:10000"), true)
-    assert.Equal(t, ValidateIPString("112.32.32.14:65535"), true)
+    assert.Equal(t, ValidateAddress("112.32.32.14:1024"), true)
+    assert.Equal(t, ValidateAddress("112.32.32.14:10000"), true)
+    assert.Equal(t, ValidateAddress("112.32.32.14:65535"), true)
 }
 
-/* PeerState tests */
+/* Peer tests */
 
-func TestNewPeerState(t *testing.T) {
-    p := NewPeerState(address)
+func TestNewPeer(t *testing.T) {
+    p := NewPeer(address)
     assert.NotEqual(t, p.LastSeen, 0)
     assert.Equal(t, p.Addr, address)
 }
 
-func TestPeerStateSeen(t *testing.T) {
-    p := NewPeerState(address)
+func TestPeerSeen(t *testing.T) {
+    p := NewPeer(address)
     x := p.LastSeen
     time.Sleep(time.Second)
     p.Seen()
@@ -70,41 +70,41 @@ func TestPeerStateSeen(t *testing.T) {
     }
 }
 
-func TestPeerStateString(t *testing.T) {
-    p := NewPeerState(address)
+func TestPeerString(t *testing.T) {
+    p := NewPeer(address)
     assert.Equal(t, address, p.String())
 }
 
 /* PeerList tests */
 
-func TestNewPeerList(t *testing.T) {
-    p := NewPeerList(10)
-    assert.NotNil(t, p.Peers)
-    assert.Equal(t, len(p.Peers), 0)
-    assert.NotNil(t, p.BlacklistedPeers)
+func TestNewPex(t *testing.T) {
+    p := NewPex(10)
+    assert.NotNil(t, p.Peerlist)
+    assert.Equal(t, len(p.Peerlist), 0)
+    assert.NotNil(t, p.Blacklist)
     assert.NotNil(t, p.BootstrapEndpoints)
     assert.Equal(t, len(p.BootstrapEndpoints), 0)
     assert.Equal(t, p.maxPeers, 10)
 }
 
-func TestBlacklist(t *testing.T) {
-    p := NewPeerList(10)
+func TestAddBlacklist(t *testing.T) {
+    p := NewPex(10)
     p.AddPeer(address)
-    assert.NotNil(t, p.Peers[address])
-    _, exists := p.BlacklistedPeers[address]
+    assert.NotNil(t, p.Peerlist[address])
+    _, exists := p.Blacklist[address]
     assert.Equal(t, exists, false)
     duration := time.Minute * 9
-    p.Blacklist(p.Peers[address].Addr, duration)
-    assert.Nil(t, p.Peers[address])
-    assert.Equal(t, p.BlacklistedPeers[address].Duration, duration)
+    p.AddBlacklist(p.Peerlist[address].Addr, duration)
+    assert.Nil(t, p.Peerlist[address])
+    assert.Equal(t, p.Blacklist[address].Duration, duration)
     now := time.Now()
-    assert.Equal(t, p.BlacklistedPeers[address].Start.Before(now), true)
-    assert.Equal(t, p.BlacklistedPeers[address].Start.Add(duration).After(now),
+    assert.Equal(t, p.Blacklist[address].Start.Before(now), true)
+    assert.Equal(t, p.Blacklist[address].Start.Add(duration).After(now),
         true)
 }
 
 func TestSetMaxPeers(t *testing.T) {
-    p := NewPeerList(10)
+    p := NewPex(10)
     p.SetMaxPeers(20)
     assert.Equal(t, p.maxPeers, 20)
 
@@ -112,9 +112,9 @@ func TestSetMaxPeers(t *testing.T) {
     for i := 0; i < 20; i++ {
         p.AddPeer(fmt.Sprintf("112.32.32.14:%d", i+6000))
     }
-    assert.Equal(t, len(p.Peers), 20)
+    assert.Equal(t, len(p.Peerlist), 20)
     p.SetMaxPeers(10)
-    assert.Equal(t, len(p.Peers), 10)
+    assert.Equal(t, len(p.Peerlist), 10)
 
     // setting invalid raises panic
     defer func() {
@@ -127,7 +127,7 @@ func TestSetMaxPeers(t *testing.T) {
 }
 
 func TestAddBootstrapEndpoint(t *testing.T) {
-    p := NewPeerList(10)
+    p := NewPex(10)
     assert.Equal(t, len(p.BootstrapEndpoints), 0)
     endpoint := "http://example.com/peers.txt"
     p.AddBootstrapEndpoint(endpoint)
@@ -136,7 +136,7 @@ func TestAddBootstrapEndpoint(t *testing.T) {
 }
 
 func TestBootstrapPeers(t *testing.T) {
-    p := NewPeerList(10)
+    p := NewPex(10)
     endpoint := "http://example.com/peers.txt"
     p.AddBootstrapEndpoint(endpoint)
 
@@ -148,8 +148,8 @@ func TestBootstrapPeers(t *testing.T) {
     }
     n := p.BootstrapPeers()
     assert.Equal(t, n, 2)
-    assert.NotNil(t, p.Peers["112.32.32.14:10011"])
-    assert.NotNil(t, p.Peers["112.32.32.14:20011"])
+    assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
+    assert.NotNil(t, p.Peerlist["112.32.32.14:20011"])
 
     // Test failed endpoint
     extractPeersFromHttp = func(e string) ([]string, error) {
@@ -174,7 +174,7 @@ func TestRequestPeers(t *testing.T) {
     connections := make([]net.Conn, 2)
     connections[0] = &DummyConnection{}
     connections[1] = &DummyConnection{}
-    p := NewPeerList(1)
+    p := NewPex(1)
     p.RequestPeers(connections, NewDummyGetPeersMessage)
     assert.Equal(t, dummyGetSent, true)
     dummyGetSent = false
@@ -187,19 +187,19 @@ func TestRequestPeers(t *testing.T) {
 }
 
 func TestRespondToGivePeersMessage(t *testing.T) {
-    p := NewPeerList(10)
-    peers := make([]*PeerState, 2)
-    peers[0] = NewPeerState("112.32.32.14:10011")
-    peers[1] = NewPeerState("112.32.32.14:20011")
+    p := NewPex(10)
+    peers := make([]*Peer, 2)
+    peers[0] = NewPeer("112.32.32.14:10011")
+    peers[1] = NewPeer("112.32.32.14:20011")
     m := NewDummyGivePeersMessage(peers)
     p.RespondToGivePeersMessage(m)
-    assert.NotNil(t, p.Peers[peers[0].String()])
-    assert.NotNil(t, p.Peers[peers[1].String()])
+    assert.NotNil(t, p.Peerlist[peers[0].String()])
+    assert.NotNil(t, p.Peerlist[peers[1].String()])
 }
 
 func TestResponseToGetPeersMessage(t *testing.T) {
     dummyGiveSent = false
-    p := NewPeerList(10)
+    p := NewPex(10)
     c := &DummyConnection{}
 
     // check without peers
@@ -222,24 +222,24 @@ func TestResponseToGetPeersMessage(t *testing.T) {
 }
 
 func TestClearOldPeers(t *testing.T) {
-    p := NewPeerList(10)
+    p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
     p.AddPeer("112.32.32.14:20011")
-    assert.Equal(t, len(p.Peers), 2)
+    assert.Equal(t, len(p.Peerlist), 2)
     p.ClearOldPeers(100)
-    assert.Equal(t, len(p.Peers), 2)
-    p.Peers["112.32.32.14:20011"].LastSeen -= 101
+    assert.Equal(t, len(p.Peerlist), 2)
+    p.Peerlist["112.32.32.14:20011"].LastSeen -= 101
     p.ClearOldPeers(100)
-    assert.Equal(t, len(p.Peers), 1)
-    assert.Nil(t, p.Peers["112.32.32.14:20011"])
-    assert.NotNil(t, p.Peers["112.32.32.14:10011"])
+    assert.Equal(t, len(p.Peerlist), 1)
+    assert.Nil(t, p.Peerlist["112.32.32.14:20011"])
+    assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
 }
 
-func TestGetPeerAddresses(t *testing.T) {
-    p := NewPeerList(10)
+func TestGetAddresses(t *testing.T) {
+    p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
     p.AddPeer("112.32.32.14:20011")
-    addresses := p.GetPeerAddresses()
+    addresses := p.Peerlist.GetAddresses()
     assert.Equal(t, len(addresses), 2)
     sort.Strings(addresses)
     assert.Equal(t, addresses, []string{
@@ -248,31 +248,7 @@ func TestGetPeerAddresses(t *testing.T) {
     })
 }
 
-func TestRandomPeer(t *testing.T) {
-    p := NewPeerList(10)
-    // check without peers
-    assert.Nil(t, p.RandomPeer())
-    p.AddPeer("112.32.32.14:10011")
-    p.AddPeer("112.32.32.14:20011")
-    found100 := false
-    found200 := false
-    for i := 0; i < 1000; i++ {
-        peer := p.RandomPeer()
-        assert.NotNil(t, peer)
-        if peer.String() == "112.32.32.14:10011" {
-            found100 = true
-        } else if peer.String() == "112.32.32.14:20011" {
-            found200 = true
-        } else {
-            // unexpected key returned
-            assert.NotNil(t, nil)
-        }
-    }
-    assert.Equal(t, found100, true)
-    assert.Equal(t, found200, true)
-}
-
-func convertPeersToStrings(peers []*PeerState) []string {
+func convertPeersToStrings(peers []*Peer) []string {
     addresses := make([]string, 0, len(peers))
     for _, p := range peers {
         addresses = append(addresses, p.String())
@@ -280,18 +256,19 @@ func convertPeersToStrings(peers []*PeerState) []string {
     return addresses
 }
 
-func compareRandomPeers(t *testing.T, p *PeerList, npeers int,
+func compareRandomPeers(t *testing.T, p *Pex, npeers int,
     result []string) {
-    peers := p.RandomPeers(npeers)
+    peers := p.Peerlist.Random(npeers)
     addresses := convertPeersToStrings(peers)
     sort.Strings(addresses)
     assert.Equal(t, addresses, result)
 }
 
 func TestRandomPeers(t *testing.T) {
-    p := NewPeerList(10)
+    p := NewPex(10)
     // check without peers
-    assert.Nil(t, p.RandomPeers(100))
+    assert.NotNil(t, p.Peerlist.Random(100))
+    assert.Equal(t, len(p.Peerlist.Random(100)), 0)
 
     // check with one peer
     p.AddPeer("112.32.32.14:10011")
@@ -306,7 +283,7 @@ func TestRandomPeers(t *testing.T) {
     // check with two peers
     p.AddPeer("112.32.32.14:20011")
     // 0 defaults to all peers
-    one := p.RandomPeers(1)[0].String()
+    one := p.Peerlist.Random(1)[0].String()
     if one != "112.32.32.14:10011" && one != "112.32.32.14:20011" {
         assert.Nil(t, nil)
     }
@@ -329,15 +306,15 @@ func TestRandomPeers(t *testing.T) {
 }
 
 func TestGetPeer(t *testing.T) {
-    p := NewPeerList(10)
+    p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
-    assert.Nil(t, p.Peers["xxx"])
-    assert.Equal(t, p.Peers["112.32.32.14:10011"].String(),
+    assert.Nil(t, p.Peerlist["xxx"])
+    assert.Equal(t, p.Peerlist["112.32.32.14:10011"].String(),
         "112.32.32.14:10011")
 }
 
 func TestFull(t *testing.T) {
-    p := NewPeerList(1)
+    p := NewPex(1)
     assert.Equal(t, p.Full(), false)
     p.AddPeer("112.32.32.14:10011")
     assert.Equal(t, p.Full(), true)
@@ -346,26 +323,26 @@ func TestFull(t *testing.T) {
 }
 
 func TestAddPeer(t *testing.T) {
-    p := NewPeerList(1)
+    p := NewPex(1)
 
     // adding "" peer results in error
     peer, err := p.AddPeer("")
     assert.Nil(t, peer)
     assert.NotNil(t, err)
     assert.Equal(t, err, InvalidAddressError)
-    assert.Equal(t, len(p.Peers), 0)
+    assert.Equal(t, len(p.Peerlist), 0)
 
     peer, err = p.AddPeer("112.32.32.14:10011")
     assert.Nil(t, err)
     assert.Equal(t, peer.String(), "112.32.32.14:10011")
-    assert.NotNil(t, p.Peers["112.32.32.14:10011"])
+    assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
     past := peer.LastSeen
 
     // full list
     twopeer, err := p.AddPeer("112.32.32.14:20011")
-    assert.Equal(t, err, PeerListFullError)
+    assert.Equal(t, err, PeerlistFullError)
     assert.Nil(t, twopeer)
-    assert.Nil(t, p.Peers["112.32.32.14:20011"])
+    assert.Nil(t, p.Peerlist["112.32.32.14:20011"])
 
     // re-add original peer
     time.Sleep(time.Second)
@@ -376,21 +353,21 @@ func TestAddPeer(t *testing.T) {
     assert.Equal(t, repeer.String(), "112.32.32.14:10011")
     assert.Equal(t, repeer.LastSeen > past, true)
 
-    assert.NotNil(t, p.Peers["112.32.32.14:10011"])
+    assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
 }
 
-func TestSaveLoadPeerDatabase(t *testing.T) {
-    p := NewPeerList(10)
+func TestSaveLoad(t *testing.T) {
+    p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
     p.AddPeer("112.32.32.14:20011")
-    err := p.SavePeerDatabase("./")
+    err := p.Save("./")
     assert.Nil(t, err)
 
-    q := NewPeerList(10)
-    err = q.LoadPeerDatabase("./")
+    q := NewPex(10)
+    err = q.Load("./")
     assert.Nil(t, err)
-    assert.NotNil(t, q.Peers["112.32.32.14:10011"])
-    assert.NotNil(t, q.Peers["112.32.32.14:20011"])
+    assert.NotNil(t, q.Peerlist["112.32.32.14:10011"])
+    assert.NotNil(t, q.Peerlist["112.32.32.14:20011"])
 
     // TODO -- any way to force os.Create or f.WriteString to return an error?
 }
@@ -484,7 +461,7 @@ func NewDummyGetPeersMessage() GetPeersMessage {
 
 // Satisfies GivePeersMessage interface
 type DummyGivePeersMessage struct {
-    peers []*PeerState
+    peers []*Peer
 }
 
 var dummyGiveSent bool = false
@@ -502,6 +479,6 @@ func (self *DummyGivePeersMessage) GetPeers() []string {
     return p
 }
 
-func NewDummyGivePeersMessage(p []*PeerState) GivePeersMessage {
+func NewDummyGivePeersMessage(p []*Peer) GivePeersMessage {
     return &DummyGivePeersMessage{peers: p}
 }

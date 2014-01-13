@@ -22,3 +22,6 @@ _testmain.go
 *.exe
 
 peers.txt
+blacklisted_peers.txt
+coverage.out
+*.out
