@@ -9,11 +9,17 @@ import (
     "net"
     "os"
     "sort"
+    "strings"
     "testing"
     "time"
 )
 
-var address string = "112.32.32.14:3030"
+var (
+    address   = "112.32.32.14:3030"
+    addresses = []string{
+        address, "111.32.32.13:2020", "69.32.54.111:2222",
+    }
+)
 
 func init() {
     // silence the logger
@@ -92,6 +98,7 @@ func TestBlacklistEntryExpiresAt(t *testing.T) {
 /* Blacklist tests */
 
 func TestBlacklistSaveLoad(t *testing.T) {
+    // Create and save a blacklist
     os.Remove("./" + BlacklistedDatabaseFilename)
     b := make(Blacklist)
     be := NewBlacklistEntry(time.Minute)
@@ -99,6 +106,7 @@ func TestBlacklistSaveLoad(t *testing.T) {
     b[""] = be
     b.Save(".")
 
+    // Check that the file appears correct
     f, err := os.Open("./" + BlacklistedDatabaseFilename)
     assert.Nil(t, err)
     buf := make([]byte, 1024)
@@ -106,11 +114,11 @@ func TestBlacklistSaveLoad(t *testing.T) {
     n, err := reader.Read(buf)
     assert.Nil(t, err)
     buf = buf[:n]
-    t.Log(string(buf))
     assert.Equal(t, string(buf[:len(address)]), address)
     assert.Equal(t, int8(buf[len(buf)-1]), '\n')
     f.Close()
 
+    // Load the saved blacklist, check the contents match
     bb, err := LoadBlacklist(".")
     assert.Nil(t, err)
     assert.Equal(t, len(bb), len(b)-1)
@@ -118,6 +126,33 @@ func TestBlacklistSaveLoad(t *testing.T) {
         assert.Equal(t, v.Start.Unix(), b[k].Start.Unix())
         assert.Equal(t, v.Duration, b[k].Duration)
     }
+
+    // Write a file with bad data
+    f, err = os.Create("./" + BlacklistedDatabaseFilename)
+    assert.Nil(t, err)
+    garbage := []string{
+        "", // empty line
+        "#" + address + " 1000 1000", // commented line
+        "notaddress 1000 1000",       // bad address
+        address + " xxx 1000",        // bad start time
+        address + " 1000 xxx",        // bad duration
+        address + " 1000",            // not enough info
+        // this one is good, but has extra spaces
+        address + "  9999999999\t\t1000",
+    }
+    w := bufio.NewWriter(f)
+    data := strings.Join(garbage, "\n") + "\n"
+    n, err = w.Write([]byte(data))
+    assert.Nil(t, err)
+    w.Flush()
+    f.Close()
+
+    // Load the file with bad data and confirm they did not make it
+    bb, err = LoadBlacklist(".")
+    assert.Nil(t, err)
+    assert.Equal(t, len(bb), 1)
+    assert.NotNil(t, bb[address])
+    assert.Equal(t, bb[address].Duration, time.Duration(1000)*time.Second)
 }
 
 func TestBlacklistRefresh(t *testing.T) {
@@ -128,6 +163,25 @@ func TestBlacklistRefresh(t *testing.T) {
     assert.Equal(t, len(b), 1)
     b.Refresh()
     assert.Equal(t, len(b), 0)
+}
+
+func TestBlacklistGetAddresses(t *testing.T) {
+    b := make(Blacklist)
+    for _, a := range addresses {
+        b[a] = NewBlacklistEntry(time.Second)
+    }
+    expect := make([]string, len(addresses))
+    for i, k := range addresses {
+        expect[i] = k
+    }
+    sort.Strings(expect)
+    keys := b.GetAddresses()
+    sort.Strings(keys)
+    assert.Equal(t, len(keys), len(expect))
+    for i, v := range keys {
+        assert.Equal(t, v, expect[i])
+    }
+
 }
 
 /* Pex tests */
@@ -154,6 +208,10 @@ func TestAddBlacklistEntry(t *testing.T) {
     assert.Equal(t, p.Blacklist[address].Start.Before(now), true)
     assert.Equal(t, p.Blacklist[address].Start.Add(duration).After(now),
         true)
+    // blacklisting invalid peer triggers logger -- just get the coverage
+    p.AddBlacklistEntry("xxx", time.Second)
+    _, exists = p.Blacklist["xxx"]
+    assert.Equal(t, exists, false)
 }
 
 func TestSetMaxPeers(t *testing.T) {
@@ -364,12 +422,26 @@ func TestAddPeer(t *testing.T) {
     assert.Equal(t, repeer.LastSeen > past, true)
 
     assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
+
+    // Adding blacklisted peer is invalid
+    delete(p.Peerlist, address)
+    p.AddBlacklistEntry(address, time.Second)
+    peer, err = p.AddPeer(address)
+    assert.NotNil(t, err)
+    assert.Nil(t, peer)
+    assert.Nil(t, p.Peerlist[address])
 }
 
 func TestSaveLoad(t *testing.T) {
     p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
     p.AddPeer("112.32.32.14:20011")
+    // bypass AddPeer to add a blacklist and normal address at the same time
+    // saving this and reloading it should cause the address to be
+    // blacklisted only
+    bad := "111.44.44.22:11021"
+    p.Peerlist[bad] = NewPeer(bad)
+    p.AddBlacklistEntry(bad, time.Hour)
     err := p.Save("./")
     assert.Nil(t, err)
 
@@ -378,6 +450,9 @@ func TestSaveLoad(t *testing.T) {
     assert.Nil(t, err)
     assert.NotNil(t, q.Peerlist["112.32.32.14:10011"])
     assert.NotNil(t, q.Peerlist["112.32.32.14:20011"])
+    assert.Nil(t, q.Peerlist[bad])
+    _, exists := q.Blacklist[bad]
+    assert.Equal(t, exists, true)
 
     // TODO -- any way to force os.Create or f.WriteString to return an error?
 }

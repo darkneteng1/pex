@@ -161,6 +161,7 @@ func LoadBlacklist(dir string) (Blacklist, error) {
     }
     blacklist := make(Blacklist)
     for _, line := range lines {
+        line = whitespaceFilter.ReplaceAllString(line, " ")
         pts := make([]string, 0, 3)
         for _, p := range strings.Split(line, " ") {
             if p != "" {
@@ -191,7 +192,7 @@ func LoadBlacklist(dir string) (Blacklist, error) {
         }
         blacklist[addr] = BlacklistEntry{
             Start:    time.Unix(start, 0).UTC(),
-            Duration: time.Duration(duration * 1e9),
+            Duration: time.Duration(duration) * time.Second,
         }
     }
     blacklist.Refresh()
