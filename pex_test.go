@@ -1,15 +1,24 @@
 package pex
 
 import (
+    "bufio"
     "fmt"
+    "github.com/op/go-logging"
     "github.com/stretchr/testify/assert"
+    "io/ioutil"
     "net"
+    "os"
     "sort"
     "testing"
     "time"
 )
 
 var address string = "112.32.32.14:3030"
+
+func init() {
+    // silence the logger
+    logging.SetBackend(logging.NewLogBackend(ioutil.Discard, "", 0))
+}
 
 // empty string
 func TestValidateAddress(t *testing.T) {
@@ -72,7 +81,56 @@ func TestPeerString(t *testing.T) {
     assert.Equal(t, address, p.String())
 }
 
-/* PeerList tests */
+/* BlacklistEntry tests */
+
+func TestBlacklistEntryExpiresAt(t *testing.T) {
+    now := time.Now().UTC()
+    b := BlacklistEntry{Start: now, Duration: time.Second}
+    assert.Equal(t, now.Add(time.Second), b.ExpiresAt())
+}
+
+/* Blacklist tests */
+
+func TestBlacklistSaveLoad(t *testing.T) {
+    os.Remove("./" + BlacklistedDatabaseFilename)
+    b := make(Blacklist)
+    be := NewBlacklistEntry(time.Minute)
+    b[address] = be
+    b[""] = be
+    b.Save(".")
+
+    f, err := os.Open("./" + BlacklistedDatabaseFilename)
+    assert.Nil(t, err)
+    buf := make([]byte, 1024)
+    reader := bufio.NewReader(f)
+    n, err := reader.Read(buf)
+    assert.Nil(t, err)
+    buf = buf[:n]
+    t.Log(string(buf))
+    assert.Equal(t, string(buf[:len(address)]), address)
+    assert.Equal(t, int8(buf[len(buf)-1]), '\n')
+    f.Close()
+
+    bb, err := LoadBlacklist(".")
+    assert.Nil(t, err)
+    assert.Equal(t, len(bb), len(b)-1)
+    for k, v := range bb {
+        assert.Equal(t, v.Start.Unix(), b[k].Start.Unix())
+        assert.Equal(t, v.Duration, b[k].Duration)
+    }
+}
+
+func TestBlacklistRefresh(t *testing.T) {
+    b := make(Blacklist)
+    be := NewBlacklistEntry(time.Microsecond)
+    b[address] = be
+    time.Sleep(time.Microsecond * 500)
+    assert.Equal(t, len(b), 1)
+    b.Refresh()
+    assert.Equal(t, len(b), 0)
+}
+
+/* Pex tests */
 
 func TestNewPex(t *testing.T) {
     p := NewPex(10)

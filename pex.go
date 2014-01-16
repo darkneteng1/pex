@@ -4,6 +4,7 @@ package pex
 import (
     "errors"
     "fmt"
+    "github.com/op/go-logging"
     "io"
     "log"
     "math/rand"
@@ -14,8 +15,6 @@ import (
     "strconv"
     "strings"
     "time"
-
-    "github.com/op/go-logging"
 )
 
 var (
@@ -157,12 +156,17 @@ func LoadBlacklist(dir string) (Blacklist, error) {
         return nil, err
     }
     logInvalid := func(line, msg string) {
-        logger.Warning("Invalid blacklist db entry: \"%s\"\n", line)
-        logger.Warning("Reason: %s\n", msg)
+        logger.Warning("Invalid blacklist db entry: \"%s\"", line)
+        logger.Warning("Reason: %s", msg)
     }
     blacklist := make(Blacklist)
     for _, line := range lines {
-        pts := strings.Split(line, " ")
+        pts := make([]string, 0, 3)
+        for _, p := range strings.Split(line, " ") {
+            if p != "" {
+                pts = append(pts, p)
+            }
+        }
         if len(pts) != 3 {
             logInvalid(line, "Not of form $ADDR $BANSTART $BANDURATION")
             continue
@@ -180,14 +184,14 @@ func LoadBlacklist(dir string) (Blacklist, error) {
             logInvalid(line, fmt.Sprintf("Invalid start time: %v", err))
             continue
         }
-        duration, err := strconv.ParseInt(pts[1], 10, 64)
+        duration, err := strconv.ParseInt(pts[2], 10, 64)
         if err != nil {
             logInvalid(line, fmt.Sprintf("Invalid duration: %v", err))
             continue
         }
         blacklist[addr] = BlacklistEntry{
-            Start:    time.Unix(start, 0),
-            Duration: time.Duration(duration),
+            Start:    time.Unix(start, 0).UTC(),
+            Duration: time.Duration(duration * 1e9),
         }
     }
     blacklist.Refresh()
@@ -262,8 +266,8 @@ func LoadPeerlist(dir string) (Peerlist, error) {
         return nil, err
     }
     logInvalid := func(line, msg string) {
-        logger.Warning("Invalid peerlist db entry: \"%s\"\n", line)
-        logger.Warning("Reason: %s\n", msg)
+        logger.Warning("Invalid peerlist db entry: \"%s\"", line)
+        logger.Warning("Reason: %s", msg)
     }
     peerlist := make(Peerlist, len(addrs))
     for _, addr := range addrs {
@@ -319,9 +323,9 @@ func (self *Pex) AddBlacklistEntry(addr string, duration time.Duration) {
     if ValidateAddress(addr) {
         delete(self.Peerlist, addr)
         self.Blacklist[addr] = NewBlacklistEntry(duration)
-        logger.Debug("Blacklisting peer %s for %s\n", addr, duration.String())
+        logger.Debug("Blacklisting peer %s for %s", addr, duration.String())
     } else {
-        logger.Warning("Attempted to blacklist invalid IP:Port %s\n", addr)
+        logger.Warning("Attempted to blacklist invalid IP:Port %s", addr)
     }
 }
 
