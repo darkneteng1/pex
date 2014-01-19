@@ -378,7 +378,11 @@ func (self *Pex) RequestPeers(connections []net.Conn,
 // Adds peers received from an incoming GivePeersMessage
 func (self *Pex) RespondToGivePeersMessage(m GivePeersMessage) {
     for _, p := range m.GetPeers() {
-        self.AddPeer(p)
+        _, err := self.AddPeer(p)
+        if err != nil {
+            logger.Warning(
+                "Failed to add peer received from GivePeersMessage: %s\n", p)
+        }
     }
 }
 

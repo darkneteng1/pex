@@ -26,8 +26,8 @@ func init() {
     logging.SetBackend(logging.NewLogBackend(ioutil.Discard, "", 0))
 }
 
-// empty string
 func TestValidateAddress(t *testing.T) {
+    // empty string
     assert.Equal(t, ValidateAddress(""), false)
     // doubled ip:port
     assert.Equal(t, ValidateAddress("112.32.32.14:100112.32.32.14:101"), false)
