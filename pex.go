@@ -22,8 +22,6 @@ var (
     PeerDatabaseFilename = "peers.txt"
     // Filename for disk-cached blacklisted peers
     BlacklistedDatabaseFilename = "blacklisted_peers.txt"
-    // Number of peers to send in response to a GetPeers request
-    PeerReplyCount = 20
     // Returned when the Pex is at a maximum
     PeerlistFullError = errors.New("Peer list full")
     // Returned when an address appears malformed
@@ -363,39 +361,20 @@ func (self *Pex) SetMaxPeers(max int) {
     self.Peerlist = peers
 }
 
-// Requests peers sequentially from a list of connections.
-// Your message's Send() method should spawn a goroutine if one is desired
-func (self *Pex) RequestPeers(connections []net.Conn,
-    message_ctor GetPeersMessageConstructor) {
-    if !self.Full() {
-        for _, conn := range connections {
-            m := message_ctor()
-            m.Send(conn)
-        }
-    }
-}
-
-// Adds peers received from an incoming GivePeersMessage
-func (self *Pex) RespondToGivePeersMessage(m GivePeersMessage) {
-    for _, p := range m.GetPeers() {
+// Add multiple peers at once. Any errors will be logged, but not returned
+// Returns the number of peers that were added without error.  Note that
+// adding a duplicate peer will not cause an error.
+func (self *Pex) AddPeers(peers []string) int {
+    n := len(peers)
+    for _, p := range peers {
         _, err := self.AddPeer(p)
         if err != nil {
-            logger.Warning("Failed to add GivePeersMessage peer %s", p)
+            logger.Warning("Failed to add peer %s", p)
             logger.Warning("Reason: %v", err)
+            n--
         }
     }
-}
-
-// Sends a GivePeersMessage in response to an incoming GetPeersMessage. If no
-// peers are available to send, nil is returned and no message is sent.
-func (self *Pex) RespondToGetPeersMessage(conn net.Conn,
-    message_ctor GivePeersMessageConstructor) (GivePeersMessage, error) {
-    peers := self.Peerlist.Random(PeerReplyCount)
-    if len(peers) == 0 {
-        return nil, nil
-    }
-    m := message_ctor(peers)
-    return m, m.Send(conn)
+    return n
 }
 
 // Loads both the normal peer and blacklisted peer databases
@@ -425,30 +404,6 @@ func (self *Pex) Save(dir string) error {
     }
     return err
 }
-
-/* Binary protocol messages */
-
-// A request for more peers
-type GetPeersMessage interface {
-    // This should result in the message being sent to the connection
-    Send(net.Conn) error
-}
-
-// A response to GetPeersMessage, or unsolicited
-type GivePeersMessage interface {
-    // This should return an array of remote addresses
-    GetPeers() []string
-    // This should result in the message being sent to the connection
-    Send(net.Conn) error
-}
-
-// A function that returns an instance that satisfies the GetPeersMessage
-// interface
-type GetPeersMessageConstructor func() GetPeersMessage
-
-// A function that returns an instance that satisfies the GivePeersMessage
-// interface
-type GivePeersMessageConstructor func([]*Peer) GivePeersMessage
 
 /* Common utilities */
 

@@ -2,7 +2,6 @@ package pex
 
 import (
     "bufio"
-    "errors"
     "fmt"
     "github.com/op/go-logging"
     "github.com/stretchr/testify/assert"
@@ -238,63 +237,17 @@ func TestSetMaxPeers(t *testing.T) {
     p.SetMaxPeers(-1)
 }
 
-func TestRequestPeers(t *testing.T) {
-    dummyGetSent = false
-    connections := make([]net.Conn, 2)
-    connections[0] = &DummyConnection{}
-    connections[1] = &DummyConnection{}
-    p := NewPex(1)
-    p.RequestPeers(connections, NewDummyGetPeersMessage)
-    assert.Equal(t, dummyGetSent, true)
-    dummyGetSent = false
-
-    // Test with Full()
-    p.AddPeer("112.32.32.14:10011")
-    p.RequestPeers(connections, NewDummyGetPeersMessage)
-    assert.Equal(t, dummyGetSent, false)
-    dummyGetSent = false
-}
-
-func TestRespondToGivePeersMessage(t *testing.T) {
+func TestAddPeers(t *testing.T) {
     p := NewPex(10)
-    peers := make([]*Peer, 2)
-    peers[0] = NewPeer("112.32.32.14:10011")
-    peers[1] = NewPeer("112.32.32.14:20011")
-    m := NewDummyGivePeersMessage(peers)
-    p.RespondToGivePeersMessage(m)
-    assert.NotNil(t, p.Peerlist[peers[0].String()])
-    assert.NotNil(t, p.Peerlist[peers[1].String()])
-}
-
-func TestResponseToGetPeersMessage(t *testing.T) {
-    dummyGiveSent = false
-    p := NewPex(10)
-    c := &DummyConnection{}
-
-    // check without peers
-    _m, err := p.RespondToGetPeersMessage(c, NewDummyGivePeersMessage)
-    assert.Nil(t, _m)
-    assert.Nil(t, err)
-
-    // check with peers
-    p.AddPeer("112.32.32.14:10011")
-    p.AddPeer("112.32.32.14:20011")
-    _m, err = p.RespondToGetPeersMessage(c, NewDummyGivePeersMessage)
-    assert.Nil(t, err)
-    m, ok := _m.(*DummyGivePeersMessage)
-    assert.Equal(t, ok, true)
-    assert.Equal(t, len(m.peers), 2)
-    for _, peer := range m.peers {
-        assert.Equal(t, (peer.String() == "112.32.32.14:10011" ||
-            peer.String() == "112.32.32.14:20011"), true)
-    }
-    assert.Equal(t, dummyGiveSent, true)
-    dummyGiveSent = false
-
-    // error should be returned if it failed
-    _m, err = p.RespondToGetPeersMessage(c, NewFailingGivePeersMessage)
-    assert.NotNil(t, _m)
-    assert.NotNil(t, err)
+    peers := make([]string, 3)
+    peers[0] = "112.32.32.14:10011"
+    peers[1] = "112.32.32.14:20011"
+    peers[2] = "xxx"
+    n := p.AddPeers(peers)
+    assert.Equal(t, n, 2)
+    assert.NotNil(t, p.Peerlist[peers[0]])
+    assert.NotNil(t, p.Peerlist[peers[1]])
+    assert.Nil(t, p.Peerlist[peers[2]])
 }
 
 func TestClearOld(t *testing.T) {
@@ -511,57 +464,4 @@ func (self *DummyConnection) SetReadDeadline(t time.Time) error {
 
 func (self *DummyConnection) SetWriteDeadline(t time.Time) error {
     return nil
-}
-
-// Satisfies GetPeersMessage interface
-type DummyGetPeersMessage struct{}
-
-var dummyGetSent bool = false
-
-func (self *DummyGetPeersMessage) Send(c net.Conn) error {
-    dummyGetSent = true
-    return nil
-}
-
-func NewDummyGetPeersMessage() GetPeersMessage {
-    return &DummyGetPeersMessage{}
-}
-
-// Satisfies GivePeersMessage interface
-type DummyGivePeersMessage struct {
-    peers []*Peer
-}
-
-var dummyGiveSent bool = false
-
-func (self *DummyGivePeersMessage) Send(c net.Conn) error {
-    dummyGiveSent = true
-    return nil
-}
-
-func (self *DummyGivePeersMessage) GetPeers() []string {
-    p := make([]string, len(self.peers))
-    for i, peer := range self.peers {
-        p[i] = peer.String()
-    }
-    return p
-}
-
-func NewDummyGivePeersMessage(p []*Peer) GivePeersMessage {
-    return &DummyGivePeersMessage{peers: p}
-}
-
-type FailingGivePeersMessage struct {
-}
-
-func (self *FailingGivePeersMessage) Send(c net.Conn) error {
-    return errors.New("failed")
-}
-
-func (self *FailingGivePeersMessage) GetPeers() []string {
-    return make([]string, 0)
-}
-
-func NewFailingGivePeersMessage(p []*Peer) GivePeersMessage {
-    return &FailingGivePeersMessage{}
 }
