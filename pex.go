@@ -380,8 +380,8 @@ func (self *Pex) RespondToGivePeersMessage(m GivePeersMessage) {
     for _, p := range m.GetPeers() {
         _, err := self.AddPeer(p)
         if err != nil {
-            logger.Warning(
-                "Failed to add peer received from GivePeersMessage: %s\n", p)
+            logger.Warning("Failed to add GivePeersMessage peer %s", p)
+            logger.Warning("Reason: %v", err)
         }
     }
 }
