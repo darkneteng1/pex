@@ -389,14 +389,13 @@ func (self *Pex) RespondToGivePeersMessage(m GivePeersMessage) {
 // Sends a GivePeersMessage in response to an incoming GetPeersMessage. If no
 // peers are available to send, nil is returned and no message is sent.
 func (self *Pex) RespondToGetPeersMessage(conn net.Conn,
-    message_ctor GivePeersMessageConstructor) GivePeersMessage {
+    message_ctor GivePeersMessageConstructor) (GivePeersMessage, error) {
     peers := self.Peerlist.Random(PeerReplyCount)
     if len(peers) == 0 {
-        return nil
+        return nil, nil
     }
     m := message_ctor(peers)
-    m.Send(conn)
-    return m
+    return m, m.Send(conn)
 }
 
 // Loads both the normal peer and blacklisted peer databases

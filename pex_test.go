@@ -2,6 +2,7 @@ package pex
 
 import (
     "bufio"
+    "errors"
     "fmt"
     "github.com/op/go-logging"
     "github.com/stretchr/testify/assert"
@@ -271,13 +272,15 @@ func TestResponseToGetPeersMessage(t *testing.T) {
     c := &DummyConnection{}
 
     // check without peers
-    _m := p.RespondToGetPeersMessage(c, NewDummyGivePeersMessage)
+    _m, err := p.RespondToGetPeersMessage(c, NewDummyGivePeersMessage)
     assert.Nil(t, _m)
+    assert.Nil(t, err)
 
     // check with peers
     p.AddPeer("112.32.32.14:10011")
     p.AddPeer("112.32.32.14:20011")
-    _m = p.RespondToGetPeersMessage(c, NewDummyGivePeersMessage)
+    _m, err = p.RespondToGetPeersMessage(c, NewDummyGivePeersMessage)
+    assert.Nil(t, err)
     m, ok := _m.(*DummyGivePeersMessage)
     assert.Equal(t, ok, true)
     assert.Equal(t, len(m.peers), 2)
@@ -287,6 +290,11 @@ func TestResponseToGetPeersMessage(t *testing.T) {
     }
     assert.Equal(t, dummyGiveSent, true)
     dummyGiveSent = false
+
+    // error should be returned if it failed
+    _m, err = p.RespondToGetPeersMessage(c, NewFailingGivePeersMessage)
+    assert.NotNil(t, _m)
+    assert.NotNil(t, err)
 }
 
 func TestClearOld(t *testing.T) {
@@ -541,4 +549,19 @@ func (self *DummyGivePeersMessage) GetPeers() []string {
 
 func NewDummyGivePeersMessage(p []*Peer) GivePeersMessage {
     return &DummyGivePeersMessage{peers: p}
+}
+
+type FailingGivePeersMessage struct {
+}
+
+func (self *FailingGivePeersMessage) Send(c net.Conn) error {
+    return errors.New("failed")
+}
+
+func (self *FailingGivePeersMessage) GetPeers() []string {
+    return make([]string, 0)
+}
+
+func NewFailingGivePeersMessage(p []*Peer) GivePeersMessage {
+    return &FailingGivePeersMessage{}
 }
