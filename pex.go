@@ -150,6 +150,10 @@ func (self Blacklist) GetAddresses() []string {
 // <dir>/<BlacklistedDatabaseFilename> into the Blacklist index
 func LoadBlacklist(dir string) (Blacklist, error) {
     lines, err := readLines(filepath.Join(dir, BlacklistedDatabaseFilename))
+    blacklist := make(Blacklist)
+    if os.IsNotExist(err) {
+        return blacklist, nil
+    }
     if err != nil {
         return nil, err
     }
@@ -157,7 +161,6 @@ func LoadBlacklist(dir string) (Blacklist, error) {
         logger.Warning("Invalid blacklist db entry: \"%s\"", line)
         logger.Warning("Reason: %s", msg)
     }
-    blacklist := make(Blacklist)
     for _, line := range lines {
         line = whitespaceFilter.ReplaceAllString(line, " ")
         pts := make([]string, 0, 3)
@@ -261,6 +264,10 @@ func (self Peerlist) Random(count int) []*Peer {
 func LoadPeerlist(dir string) (Peerlist, error) {
     // TODO -- save and load PeerState.Seen
     addrs, err := readLines(filepath.Join(dir, PeerDatabaseFilename))
+    peerlist := make(Peerlist, len(addrs))
+    if os.IsNotExist(err) {
+        return peerlist, nil
+    }
     if err != nil {
         return nil, err
     }
@@ -268,7 +275,6 @@ func LoadPeerlist(dir string) (Peerlist, error) {
         logger.Warning("Invalid peerlist db entry: \"%s\"", line)
         logger.Warning("Reason: %s", msg)
     }
-    peerlist := make(Peerlist, len(addrs))
     for _, addr := range addrs {
         if addr == "" {
             continue
