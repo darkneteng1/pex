@@ -411,6 +411,7 @@ func TestSaveLoad(t *testing.T) {
     assert.Nil(t, err)
     assert.NotNil(t, q.Peerlist["112.32.32.14:10011"])
     assert.NotNil(t, q.Peerlist["112.32.32.14:20011"])
+    assert.Equal(t, len(q.Peerlist), 2)
     assert.Nil(t, q.Peerlist[bad])
     _, exists := q.Blacklist[bad]
     assert.Equal(t, exists, true)

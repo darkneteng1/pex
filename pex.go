@@ -270,8 +270,12 @@ func LoadPeerlist(dir string) (Peerlist, error) {
     }
     peerlist := make(Peerlist, len(addrs))
     for _, addr := range addrs {
+        if addr == "" {
+            continue
+        }
         if !ValidateAddress(addr) {
-            logInvalid(addr, fmt.Sprintf("Invalid IP:Port %s", addr))
+            logInvalid(addr, fmt.Sprintf("Invalid IP:Port \"%s\"", addr))
+            continue
         }
         peerlist[addr] = NewPeer(addr)
     }
