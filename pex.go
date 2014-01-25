@@ -216,7 +216,7 @@ func (self Peerlist) GetAddresses() []string {
 func (self Peerlist) ClearOld(time_ago time.Duration) {
     t := time.Now().Unix()
     for addr, peer := range self {
-        if t-peer.LastSeen > int64(time_ago) {
+        if t-peer.LastSeen > int64(time_ago.Seconds()) {
             delete(self, addr)
         }
     }
