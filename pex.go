@@ -59,8 +59,8 @@ func ValidateAddress(ipPort string) bool {
 
 // Peer represents a known peer
 type Peer struct {
-    Addr     string // An address of the form ip:port
-    LastSeen int64  // Unix timestamp when this peer was last seen
+    Addr     string    // An address of the form ip:port
+    LastSeen time.Time // Unix timestamp when this peer was last seen
 }
 
 // Returns a *Peer initialised by an address string of the form ip:port
@@ -72,7 +72,7 @@ func NewPeer(address string) *Peer {
 
 // Mark the peer as seen
 func (self *Peer) Seen() {
-    self.LastSeen = time.Now().Unix()
+    self.LastSeen = time.Now().UTC()
 }
 
 func (self *Peer) String() string {
@@ -214,9 +214,9 @@ func (self Peerlist) GetAddresses() []string {
 
 // Removes peers that haven't been seen in time_ago seconds
 func (self Peerlist) ClearOld(time_ago time.Duration) {
-    t := time.Now().Unix()
+    t := time.Now().UTC()
     for addr, peer := range self {
-        if t-peer.LastSeen > int64(time_ago.Seconds()) {
+        if t.Sub(peer.LastSeen) > time_ago {
             delete(self, addr)
         }
     }
@@ -225,6 +225,13 @@ func (self Peerlist) ClearOld(time_ago time.Duration) {
 // Saves known peers to disk as a newline delimited list of addresses to
 // <dir><PeerDatabaseFilename>
 func (self Peerlist) Save(dir string) error {
+    entries := make([]string, 0)
+    for _, p := range self {
+        entry := fmt.Sprintf("%s %d", p.Addr, p.LastSeen.Unix())
+        entries = append(entries, entry)
+    }
+    s := strings.Join(entries, "\n") + "\n"
+
     filename := PeerDatabaseFilename
     fn := filepath.Join(dir, filename+".tmp")
     f, err := os.Create(fn)
@@ -232,7 +239,6 @@ func (self Peerlist) Save(dir string) error {
         return err
     }
     defer f.Close()
-    s := strings.Join(self.GetAddresses(), "\n") + "\n"
     _, err = f.WriteString(s)
     if err != nil {
         return err
@@ -262,9 +268,8 @@ func (self Peerlist) Random(count int) []*Peer {
 // Loads a newline delimited list of addresses from
 // "<dir>/<PeerDatabaseFilename>"
 func LoadPeerlist(dir string) (Peerlist, error) {
-    // TODO -- save and load PeerState.Seen
-    addrs, err := readLines(filepath.Join(dir, PeerDatabaseFilename))
-    peerlist := make(Peerlist, len(addrs))
+    entries, err := readLines(filepath.Join(dir, PeerDatabaseFilename))
+    peerlist := make(Peerlist, len(entries))
     if os.IsNotExist(err) {
         return peerlist, nil
     }
@@ -275,7 +280,13 @@ func LoadPeerlist(dir string) (Peerlist, error) {
         logger.Warning("Invalid peerlist db entry: \"%s\"", line)
         logger.Warning("Reason: %s", msg)
     }
-    for _, addr := range addrs {
+    for _, entry := range entries {
+        pts := strings.Split(entry, " ")
+        if len(pts) != 2 {
+            logInvalid(entry, "Peerlist entry not of form $ADDR $SEEN")
+            continue
+        }
+        addr := pts[0]
         if addr == "" {
             continue
         }
@@ -283,7 +294,11 @@ func LoadPeerlist(dir string) (Peerlist, error) {
             logInvalid(addr, fmt.Sprintf("Invalid IP:Port \"%s\"", addr))
             continue
         }
-        peerlist[addr] = NewPeer(addr)
+        seen, err := strconv.ParseInt(pts[1], 10, 64)
+        if err != nil {
+            logInvalid(addr, err.Error())
+        }
+        peerlist[addr] = &Peer{Addr: addr, LastSeen: time.Unix(seen, 0)}
     }
     return peerlist, nil
 }

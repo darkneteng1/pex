@@ -77,7 +77,7 @@ func TestPeerSeen(t *testing.T) {
     time.Sleep(time.Second)
     p.Seen()
     assert.NotEqual(t, x, p.LastSeen)
-    if p.LastSeen <= x {
+    if p.LastSeen.Before(x) {
         t.Fail()
     }
 }
@@ -253,12 +253,12 @@ func TestAddPeers(t *testing.T) {
 func TestClearOld(t *testing.T) {
     p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
-    p.AddPeer("112.32.32.14:20011")
+    q, _ := p.AddPeer("112.32.32.14:20011")
     assert.Equal(t, len(p.Peerlist), 2)
-    p.Peerlist.ClearOld(100)
+    p.Peerlist.ClearOld(time.Second * 100)
     assert.Equal(t, len(p.Peerlist), 2)
-    p.Peerlist["112.32.32.14:20011"].LastSeen -= 101
-    p.Peerlist.ClearOld(100)
+    q.LastSeen = q.LastSeen.Add(time.Second * -200)
+    p.Peerlist.ClearOld(time.Second * 100)
     assert.Equal(t, len(p.Peerlist), 1)
     assert.Nil(t, p.Peerlist["112.32.32.14:20011"])
     assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
@@ -380,7 +380,7 @@ func TestAddPeer(t *testing.T) {
     assert.NotNil(t, repeer)
     assert.Equal(t, peer, repeer)
     assert.Equal(t, repeer.String(), "112.32.32.14:10011")
-    assert.Equal(t, repeer.LastSeen > past, true)
+    assert.Equal(t, repeer.LastSeen.After(past), true)
 
     assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
 
@@ -394,9 +394,12 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestSaveLoad(t *testing.T) {
+    defer os.Remove("./" + PeerDatabaseFilename)
+    defer os.Remove("./" + BlacklistedDatabaseFilename)
     p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
-    p.AddPeer("112.32.32.14:20011")
+    x, _ := p.AddPeer("112.32.32.14:20011")
+    x.LastSeen = time.Unix(0, 0)
     // bypass AddPeer to add a blacklist and normal address at the same time
     // saving this and reloading it should cause the address to be
     // blacklisted only
@@ -411,6 +414,10 @@ func TestSaveLoad(t *testing.T) {
     assert.Nil(t, err)
     assert.NotNil(t, q.Peerlist["112.32.32.14:10011"])
     assert.NotNil(t, q.Peerlist["112.32.32.14:20011"])
+    assert.Equal(t, q.Peerlist["112.32.32.14:20011"].LastSeen,
+        time.Unix(0, 0))
+    assert.NotEqual(t, q.Peerlist["112.32.32.14:10011"].LastSeen,
+        time.Unix(0, 0))
     assert.Equal(t, len(q.Peerlist), 2)
     assert.Nil(t, q.Peerlist[bad])
     _, exists := q.Blacklist[bad]
