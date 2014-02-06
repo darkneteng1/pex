@@ -163,6 +163,9 @@ func LoadBlacklist(dir string) (Blacklist, error) {
     }
     for _, line := range lines {
         line = whitespaceFilter.ReplaceAllString(line, " ")
+        if line == "" || strings.HasPrefix(line, "#") {
+            continue
+        }
         pts := make([]string, 0, 3)
         for _, p := range strings.Split(line, " ") {
             if p != "" {
@@ -174,9 +177,6 @@ func LoadBlacklist(dir string) (Blacklist, error) {
             continue
         }
         addr := whitespaceFilter.ReplaceAllString(pts[0], "")
-        if addr == "" || strings.HasPrefix(addr, "#") {
-            continue
-        }
         if !ValidateAddress(addr) {
             logInvalid(line, fmt.Sprintf("Invalid IP:Port %s", addr))
             continue
@@ -281,15 +281,16 @@ func LoadPeerlist(dir string) (Peerlist, error) {
         logger.Warning("Reason: %s", msg)
     }
     for _, entry := range entries {
+        entry = whitespaceFilter.ReplaceAllString(entry, " ")
+        if entry == "" || strings.HasPrefix(entry, "#") {
+            continue
+        }
         pts := strings.Split(entry, " ")
         if len(pts) != 2 {
             logInvalid(entry, "Peerlist entry not of form $ADDR $SEEN")
             continue
         }
         addr := pts[0]
-        if addr == "" {
-            continue
-        }
         if !ValidateAddress(addr) {
             logInvalid(addr, fmt.Sprintf("Invalid IP:Port \"%s\"", addr))
             continue
