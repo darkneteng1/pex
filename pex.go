@@ -40,16 +40,23 @@ var (
 )
 
 // Returns true if ipPort is a valid ip:host string
-func ValidateAddress(ipPort string) bool {
+func ValidateAddress(ipPort string, allowLocalhost bool) bool {
     ipPort = whitespaceFilter.ReplaceAllString(ipPort, "")
     pts := strings.Split(ipPort, ":")
     if len(pts) != 2 {
         return false
     }
     ip := net.ParseIP(pts[0])
-    if ip == nil || !ip.IsGlobalUnicast() {
+    if ip == nil {
+        return false
+    } else if ip.IsLoopback() {
+        if !allowLocalhost {
+            return false
+        }
+    } else if !ip.IsGlobalUnicast() {
         return false
     }
+
     port, err := strconv.ParseUint(pts[1], 10, 16)
     if err != nil || port < 1024 {
         return false
@@ -177,7 +184,7 @@ func LoadBlacklist(dir string) (Blacklist, error) {
             continue
         }
         addr := whitespaceFilter.ReplaceAllString(pts[0], "")
-        if !ValidateAddress(addr) {
+        if !ValidateAddress(addr, true) {
             logInvalid(line, fmt.Sprintf("Invalid IP:Port %s", addr))
             continue
         }
@@ -291,7 +298,7 @@ func LoadPeerlist(dir string) (Peerlist, error) {
             continue
         }
         addr := pts[0]
-        if !ValidateAddress(addr) {
+        if !ValidateAddress(addr, true) {
             logInvalid(addr, fmt.Sprintf("Invalid IP:Port \"%s\"", addr))
             continue
         }
@@ -310,21 +317,24 @@ type Pex struct {
     Peerlist Peerlist
     // Ignored peers
     Blacklist Blacklist
-    maxPeers  int
+    // If false, localhost peers will be rejected from the peerlist
+    AllowLocalhost bool
+    maxPeers       int
 }
 
 func NewPex(maxPeers int) *Pex {
     return &Pex{
-        Peerlist:  make(Peerlist, maxPeers),
-        Blacklist: make(Blacklist, 0),
-        maxPeers:  maxPeers,
+        Peerlist:       make(Peerlist, maxPeers),
+        Blacklist:      make(Blacklist, 0),
+        maxPeers:       maxPeers,
+        AllowLocalhost: false,
     }
 }
 
 // Adds a peer to the peer list, given an address. If the peer list is
 // full, PeerlistFullError is returned */
 func (self *Pex) AddPeer(addr string) (*Peer, error) {
-    if !ValidateAddress(addr) {
+    if !ValidateAddress(addr, self.AllowLocalhost) {
         return nil, InvalidAddressError
     }
     if self.IsBlacklisted(addr) {
@@ -345,7 +355,7 @@ func (self *Pex) AddPeer(addr string) (*Peer, error) {
 
 // Add a peer address to the blacklist
 func (self *Pex) AddBlacklistEntry(addr string, duration time.Duration) {
-    if ValidateAddress(addr) {
+    if ValidateAddress(addr, self.AllowLocalhost) {
         delete(self.Peerlist, addr)
         self.Blacklist[addr] = NewBlacklistEntry(duration)
         logger.Debug("Blacklisting peer %s for %s", addr, duration.String())

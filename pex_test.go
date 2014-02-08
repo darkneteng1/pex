@@ -28,39 +28,41 @@ func init() {
 
 func TestValidateAddress(t *testing.T) {
     // empty string
-    assert.Equal(t, ValidateAddress(""), false)
+    assert.Equal(t, ValidateAddress("", false), false)
     // doubled ip:port
-    assert.Equal(t, ValidateAddress("112.32.32.14:100112.32.32.14:101"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:100112.32.32.14:101", false), false)
     // requires port
-    assert.Equal(t, ValidateAddress("112.32.32.14"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14", false), false)
     // not ip
-    assert.Equal(t, ValidateAddress("112"), false)
-    assert.Equal(t, ValidateAddress("112.32"), false)
-    assert.Equal(t, ValidateAddress("112.32.32"), false)
+    assert.Equal(t, ValidateAddress("112", false), false)
+    assert.Equal(t, ValidateAddress("112.32", false), false)
+    assert.Equal(t, ValidateAddress("112.32.32", false), false)
     // bad part
-    assert.Equal(t, ValidateAddress("112.32.32.14000"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14000", false), false)
     // large port
-    assert.Equal(t, ValidateAddress("112.32.32.14:66666"), false)
-    // localhost
-    assert.Equal(t, ValidateAddress("127.0.0.1:8888"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:66666", false), false)
     // unspecified
-    assert.Equal(t, ValidateAddress("0.0.0.0:8888"), false)
+    assert.Equal(t, ValidateAddress("0.0.0.0:8888", false), false)
     // no ip
-    assert.Equal(t, ValidateAddress(":8888"), false)
+    assert.Equal(t, ValidateAddress(":8888", false), false)
     // multicast
-    assert.Equal(t, ValidateAddress("224.1.1.1:8888"), false)
+    assert.Equal(t, ValidateAddress("224.1.1.1:8888", false), false)
     // invalid ports
-    assert.Equal(t, ValidateAddress("112.32.32.14:0"), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:1"), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:10"), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:100"), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:1000"), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:1023"), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:65536"), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:0", false), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:1", false), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:10", false), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:100", false), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:1000", false), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:1023", false), false)
+    assert.Equal(t, ValidateAddress("112.32.32.14:65536", false), false)
     // valid ones
-    assert.Equal(t, ValidateAddress("112.32.32.14:1024"), true)
-    assert.Equal(t, ValidateAddress("112.32.32.14:10000"), true)
-    assert.Equal(t, ValidateAddress("112.32.32.14:65535"), true)
+    assert.Equal(t, ValidateAddress("112.32.32.14:1024", false), true)
+    assert.Equal(t, ValidateAddress("112.32.32.14:10000", false), true)
+    assert.Equal(t, ValidateAddress("112.32.32.14:65535", false), true)
+    // localhost is allowed
+    assert.Equal(t, ValidateAddress("127.0.0.1:8888", true), true)
+    // localhost is not allowed
+    assert.Equal(t, ValidateAddress("127.0.0.1:8888", false), false)
 }
 
 /* Peer tests */
@@ -239,10 +241,11 @@ func TestSetMaxPeers(t *testing.T) {
 
 func TestAddPeers(t *testing.T) {
     p := NewPex(10)
-    peers := make([]string, 3)
+    peers := make([]string, 4)
     peers[0] = "112.32.32.14:10011"
     peers[1] = "112.32.32.14:20011"
     peers[2] = "xxx"
+    peers[3] = "127.0.0.1:10444"
     n := p.AddPeers(peers)
     assert.Equal(t, n, 2)
     assert.NotNil(t, p.Peerlist[peers[0]])
@@ -349,6 +352,17 @@ func TestFull(t *testing.T) {
     assert.Equal(t, p.Full(), true)
     p.SetMaxPeers(0)
     assert.Equal(t, p.Full(), false)
+}
+
+func TestAddPeerLocalhost(t *testing.T) {
+    p := NewPex(1)
+    p.AllowLocalhost = true
+    a := "127.0.0.1:10114"
+    peer, err := p.AddPeer(a)
+    assert.Nil(t, err)
+    assert.Equal(t, len(p.Peerlist), 1)
+    assert.Equal(t, p.Peerlist[a], peer)
+    assert.Equal(t, peer.Addr, a)
 }
 
 func TestAddPeer(t *testing.T) {
