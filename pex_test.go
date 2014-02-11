@@ -413,7 +413,7 @@ func TestSaveLoad(t *testing.T) {
     p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
     x, _ := p.AddPeer("112.32.32.14:20011")
-    x.LastSeen = time.Unix(0, 0)
+    x.LastSeen = time.Time{}
     // bypass AddPeer to add a blacklist and normal address at the same time
     // saving this and reloading it should cause the address to be
     // blacklisted only
@@ -428,10 +428,8 @@ func TestSaveLoad(t *testing.T) {
     assert.Nil(t, err)
     assert.NotNil(t, q.Peerlist["112.32.32.14:10011"])
     assert.NotNil(t, q.Peerlist["112.32.32.14:20011"])
-    assert.Equal(t, q.Peerlist["112.32.32.14:20011"].LastSeen,
-        time.Unix(0, 0))
-    assert.NotEqual(t, q.Peerlist["112.32.32.14:10011"].LastSeen,
-        time.Unix(0, 0))
+    assert.True(t, q.Peerlist["112.32.32.14:20011"].LastSeen.IsZero())
+    assert.False(t, q.Peerlist["112.32.32.14:10011"].LastSeen.IsZero())
     assert.Equal(t, len(q.Peerlist), 2)
     assert.Nil(t, q.Peerlist[bad])
     _, exists := q.Blacklist[bad]
