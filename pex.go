@@ -157,7 +157,7 @@ func (self Blacklist) GetAddresses() []string {
 // <dir>/<BlacklistedDatabaseFilename> into the Blacklist index
 func LoadBlacklist(dir string) (Blacklist, error) {
     lines, err := readLines(filepath.Join(dir, BlacklistedDatabaseFilename))
-    blacklist := make(Blacklist)
+    blacklist := make(Blacklist, len(lines))
     if os.IsNotExist(err) {
         return blacklist, nil
     }
@@ -341,7 +341,7 @@ func LoadPeerlist(dir string) (Peerlist, error) {
         }
         addr := pts[0]
         if !ValidateAddress(addr, true) {
-            logInvalid(addr, fmt.Sprintf("Invalid IP:Port \"%s\"", addr))
+            logInvalid(entry, fmt.Sprintf("Invalid IP:Port \"%s\"", addr))
             continue
         }
         private := false
@@ -350,11 +350,13 @@ func LoadPeerlist(dir string) (Peerlist, error) {
         } else if pts[1] == "1" {
             private = true
         } else {
-            logInvalid(addr, fmt.Sprintf("Private field must be 0 or 1"))
+            logInvalid(entry, fmt.Sprintf("Private field must be 0 or 1"))
+            continue
         }
         seen, err := strconv.ParseInt(pts[2], 10, 64)
         if err != nil {
-            logInvalid(addr, err.Error())
+            logInvalid(entry, err.Error())
+            continue
         }
         peerlist[addr] = &Peer{
             Addr:     addr,

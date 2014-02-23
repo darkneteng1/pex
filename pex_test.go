@@ -2,6 +2,7 @@ package pex
 
 import (
     "bufio"
+    "fmt"
     "github.com/op/go-logging"
     "github.com/stretchr/testify/assert"
     "io/ioutil"
@@ -19,11 +20,14 @@ var (
     addresses = []string{
         address, "111.32.32.13:2020", "69.32.54.111:2222",
     }
+    silenceLogger = true
 )
 
 func init() {
     // silence the logger
-    logging.SetBackend(logging.NewLogBackend(ioutil.Discard, "", 0))
+    if silenceLogger {
+        logging.SetBackend(logging.NewLogBackend(ioutil.Discard, "", 0))
+    }
 }
 
 func TestValidateAddress(t *testing.T) {
@@ -508,13 +512,16 @@ func TestSaveLoad(t *testing.T) {
     defer os.Remove("./" + PeerDatabaseFilename)
     defer os.Remove("./" + BlacklistedDatabaseFilename)
     p := NewPex(10)
-    p.AddPeer("112.32.32.14:10011")
+    w, err := p.AddPeer("112.32.32.14:10011")
+    assert.Nil(t, err)
+    w.LastSeen = time.Unix(w.LastSeen.Unix(), 0)
     x, _ := p.AddPeer("112.32.32.14:20011")
     x.LastSeen = time.Time{}
     privAddr := "112.32.32.14:30011"
     y, err := p.AddPeer(privAddr)
     assert.Nil(t, err)
     y.Private = true
+    y.LastSeen = time.Unix(y.LastSeen.Unix(), 0)
     // bypass AddPeer to add a blacklist and normal address at the same time
     // saving this and reloading it should cause the address to be
     // blacklisted only
@@ -540,12 +547,77 @@ func TestSaveLoad(t *testing.T) {
     assert.NotNil(t, q.Peerlist["112.32.32.14:20011"])
     assert.NotNil(t, q.Peerlist[privAddr])
     assert.True(t, q.Peerlist["112.32.32.14:20011"].LastSeen.IsZero())
-    assert.False(t, q.Peerlist["112.32.32.14:10011"].LastSeen.IsZero())
-    assert.False(t, q.Peerlist[privAddr].LastSeen.IsZero())
+    assert.Equal(t, q.Peerlist["112.32.32.14:10011"].LastSeen,
+        p.Peerlist["112.32.32.14:10011"].LastSeen)
+    assert.Equal(t, q.Peerlist[privAddr].LastSeen,
+        p.Peerlist[privAddr].LastSeen)
     assert.False(t, q.Peerlist["112.32.32.14:10011"].Private)
     assert.False(t, q.Peerlist["112.32.32.14:20011"].Private)
     assert.True(t, q.Peerlist[privAddr].Private)
     assert.Equal(t, len(q.Peerlist), 3)
+}
+
+func TestLoadBlacklistDoesNotExist(t *testing.T) {
+    // Fail on os.IsNotExist, returns a valid empty blacklist
+    os.Remove("./" + BlacklistedDatabaseFilename)
+    b, err := LoadBlacklist("./")
+    assert.Nil(t, err)
+    assert.Equal(t, len(b), 0)
+    assert.NotNil(t, b)
+}
+
+func TestLoadPeerlistFailureHandling(t *testing.T) {
+    defer os.Remove("./" + PeerDatabaseFilename)
+
+    // File does not exist, returns empty Peerlist
+    os.Remove("./" + PeerDatabaseFilename)
+    p, err := LoadPeerlist("./")
+    assert.Nil(t, err)
+    assert.Equal(t, len(p), 0)
+    assert.NotNil(t, p)
+
+    // Bad peerlist file:
+
+    goodAddr := "123.45.54.11:9999"
+    now := Now().Unix()
+    lines := []string{
+        // Has a line with 4 entries
+        fmt.Sprintf("%s 0 %d 0", address, now),
+        // Has a line with 2 entries
+        fmt.Sprintf("%s 0", address),
+        // Empty line
+        "",
+        // Has an invalid address
+        fmt.Sprintf("54.3:9090 1 %d", now),
+        // Has an invalid value for private
+        fmt.Sprintf("%s 7 %d", address, now),
+        // Starts with a comment
+        fmt.Sprintf("#%s 0 %d", address, now),
+        // Has an invalid seen timestamp
+        fmt.Sprintf("%s 0 dog", address),
+        // Has a valid line, but extra whitespace,
+        // this should be the only one included
+        fmt.Sprintf("%s 0 %d", goodAddr, now),
+    }
+
+    f, err := os.Create("./" + PeerDatabaseFilename)
+    assert.Nil(t, err)
+    for _, line := range lines {
+        _, err = f.Write([]byte(line + "\n"))
+        assert.Nil(t, err)
+    }
+    f.Close()
+
+    p, err = LoadPeerlist("./")
+    assert.Nil(t, err)
+    assert.Equal(t, len(p), 1)
+    assert.NotNil(t, p[goodAddr])
+}
+
+func TestNow(t *testing.T) {
+    now := Now().Unix()
+    now2 := time.Now().UTC().Unix()
+    assert.True(t, now == now2 || now2-1 == now)
 }
 
 /* Addendum: dummies & mocks */
