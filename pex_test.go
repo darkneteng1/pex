@@ -15,6 +15,7 @@ import (
 
 var (
     address   = "112.32.32.14:3030"
+    address2  = "112.32.32.14:3031"
     addresses = []string{
         address, "111.32.32.13:2020", "69.32.54.111:2222",
     }
@@ -27,41 +28,41 @@ func init() {
 
 func TestValidateAddress(t *testing.T) {
     // empty string
-    assert.Equal(t, ValidateAddress("", false), false)
+    assert.False(t, ValidateAddress("", false))
     // doubled ip:port
-    assert.Equal(t, ValidateAddress("112.32.32.14:100112.32.32.14:101", false), false)
+    assert.False(t, ValidateAddress("112.32.32.14:100112.32.32.14:101", false))
     // requires port
-    assert.Equal(t, ValidateAddress("112.32.32.14", false), false)
+    assert.False(t, ValidateAddress("112.32.32.14", false))
     // not ip
-    assert.Equal(t, ValidateAddress("112", false), false)
-    assert.Equal(t, ValidateAddress("112.32", false), false)
-    assert.Equal(t, ValidateAddress("112.32.32", false), false)
+    assert.False(t, ValidateAddress("112", false))
+    assert.False(t, ValidateAddress("112.32", false))
+    assert.False(t, ValidateAddress("112.32.32", false))
     // bad part
-    assert.Equal(t, ValidateAddress("112.32.32.14000", false), false)
+    assert.False(t, ValidateAddress("112.32.32.14000", false))
     // large port
-    assert.Equal(t, ValidateAddress("112.32.32.14:66666", false), false)
+    assert.False(t, ValidateAddress("112.32.32.14:66666", false))
     // unspecified
-    assert.Equal(t, ValidateAddress("0.0.0.0:8888", false), false)
+    assert.False(t, ValidateAddress("0.0.0.0:8888", false))
     // no ip
-    assert.Equal(t, ValidateAddress(":8888", false), false)
+    assert.False(t, ValidateAddress(":8888", false))
     // multicast
-    assert.Equal(t, ValidateAddress("224.1.1.1:8888", false), false)
+    assert.False(t, ValidateAddress("224.1.1.1:8888", false))
     // invalid ports
-    assert.Equal(t, ValidateAddress("112.32.32.14:0", false), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:1", false), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:10", false), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:100", false), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:1000", false), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:1023", false), false)
-    assert.Equal(t, ValidateAddress("112.32.32.14:65536", false), false)
+    assert.False(t, ValidateAddress("112.32.32.14:0", false))
+    assert.False(t, ValidateAddress("112.32.32.14:1", false))
+    assert.False(t, ValidateAddress("112.32.32.14:10", false))
+    assert.False(t, ValidateAddress("112.32.32.14:100", false))
+    assert.False(t, ValidateAddress("112.32.32.14:1000", false))
+    assert.False(t, ValidateAddress("112.32.32.14:1023", false))
+    assert.False(t, ValidateAddress("112.32.32.14:65536", false))
     // valid ones
-    assert.Equal(t, ValidateAddress("112.32.32.14:1024", false), true)
-    assert.Equal(t, ValidateAddress("112.32.32.14:10000", false), true)
-    assert.Equal(t, ValidateAddress("112.32.32.14:65535", false), true)
+    assert.True(t, ValidateAddress("112.32.32.14:1024", false))
+    assert.True(t, ValidateAddress("112.32.32.14:10000", false))
+    assert.True(t, ValidateAddress("112.32.32.14:65535", false))
     // localhost is allowed
-    assert.Equal(t, ValidateAddress("127.0.0.1:8888", true), true)
+    assert.True(t, ValidateAddress("127.0.0.1:8888", true))
     // localhost is not allowed
-    assert.Equal(t, ValidateAddress("127.0.0.1:8888", false), false)
+    assert.False(t, ValidateAddress("127.0.0.1:8888", false))
 }
 
 /* Peer tests */
@@ -70,6 +71,7 @@ func TestNewPeer(t *testing.T) {
     p := NewPeer(address)
     assert.NotEqual(t, p.LastSeen, 0)
     assert.Equal(t, p.Addr, address)
+    assert.False(t, p.Private)
 }
 
 func TestPeerSeen(t *testing.T) {
@@ -200,19 +202,28 @@ func TestAddBlacklistEntry(t *testing.T) {
     p.AddPeer(address)
     assert.NotNil(t, p.Peerlist[address])
     _, exists := p.Blacklist[address]
-    assert.Equal(t, exists, false)
+    assert.False(t, exists)
     duration := time.Minute * 9
     p.AddBlacklistEntry(p.Peerlist[address].Addr, duration)
     assert.Nil(t, p.Peerlist[address])
     assert.Equal(t, p.Blacklist[address].Duration, duration)
     now := time.Now()
-    assert.Equal(t, p.Blacklist[address].Start.Before(now), true)
-    assert.Equal(t, p.Blacklist[address].Start.Add(duration).After(now),
-        true)
-    // blacklisting invalid peer triggers logger -- just get the coverage
+    assert.True(t, p.Blacklist[address].Start.Before(now))
+    assert.True(t, p.Blacklist[address].Start.Add(duration).After(now))
+    // Blacklisting invalid peer triggers logger -- just get the coverage
     p.AddBlacklistEntry("xxx", time.Second)
     _, exists = p.Blacklist["xxx"]
-    assert.Equal(t, exists, false)
+    assert.False(t, exists)
+    // Blacklisting private peer is prevented
+    q, err := p.AddPeer(address2)
+    assert.Nil(t, err)
+    q.Private = true
+    p.AddBlacklistEntry(address2, time.Second)
+    _, exists = p.Blacklist[address2]
+    assert.False(t, exists)
+    q = p.Peerlist[address2]
+    assert.NotNil(t, q)
+    assert.Equal(t, q.Addr, address2)
 }
 
 func TestAddPeers(t *testing.T) {
@@ -241,18 +252,64 @@ func TestClearOld(t *testing.T) {
     assert.Equal(t, len(p.Peerlist), 1)
     assert.Nil(t, p.Peerlist["112.32.32.14:20011"])
     assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
+
+    // Should ignore a private peer
+    assert.Equal(t, len(p.Peerlist), 1)
+    q, err := p.AddPeer("112.32.32.14:20011")
+    assert.Nil(t, err)
+    q.Private = true
+    assert.Equal(t, len(p.Peerlist), 2)
+    q.LastSeen = q.LastSeen.Add(time.Second * -200)
+    p.Peerlist.ClearOld(time.Second * 100)
+    // Private peer should not be removed
+    assert.Equal(t, len(p.Peerlist), 2)
+    assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
+    assert.NotNil(t, p.Peerlist["112.32.32.14:20011"])
 }
 
 func TestGetAllAddresses(t *testing.T) {
     p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
-    p.AddPeer("112.32.32.14:20011")
+    q, _ := p.AddPeer("112.32.32.14:20011")
+    q.Private = true
     addresses := p.Peerlist.GetAllAddresses()
     assert.Equal(t, len(addresses), 2)
     sort.Strings(addresses)
     assert.Equal(t, addresses, []string{
         "112.32.32.14:10011",
         "112.32.32.14:20011",
+    })
+}
+
+func TestGetPublicAddresses(t *testing.T) {
+    p := NewPex(10)
+    p.AddPeer("112.32.32.14:10011")
+    p.AddPeer("112.32.32.14:20011")
+    q, _ := p.AddPeer("112.32.32.14:30011")
+    q.Private = true
+    addresses := p.Peerlist.GetPublicAddresses()
+    assert.Equal(t, len(addresses), 2)
+    sort.Strings(addresses)
+    assert.Equal(t, addresses, []string{
+        "112.32.32.14:10011",
+        "112.32.32.14:20011",
+    })
+}
+
+func TestGetPrivateAddresses(t *testing.T) {
+    p := NewPex(10)
+    p.AddPeer("112.32.32.14:10011")
+    p.AddPeer("112.32.32.14:20011")
+    q, _ := p.AddPeer("112.32.32.14:30011")
+    r, _ := p.AddPeer("112.32.32.14:40011")
+    q.Private = true
+    r.Private = true
+    addresses := p.Peerlist.GetPrivateAddresses()
+    assert.Equal(t, len(addresses), 2)
+    sort.Strings(addresses)
+    assert.Equal(t, addresses, []string{
+        "112.32.32.14:30011",
+        "112.32.32.14:40011",
     })
 }
 
@@ -264,16 +321,22 @@ func convertPeersToStrings(peers []*Peer) []string {
     return addresses
 }
 
-func compareRandomAll(t *testing.T, p *Pex, npeers int,
-    result []string) {
-    peers := p.Peerlist.RandomAll(npeers)
+func compareRandom(t *testing.T, p *Pex, npeers int,
+    result []string, f func(int) []*Peer) {
+    peers := f(npeers)
     addresses := convertPeersToStrings(peers)
     sort.Strings(addresses)
     assert.Equal(t, addresses, result)
 }
 
-func TestRandomAll(t *testing.T) {
+func testRandom(t *testing.T, publicOnly bool) {
     p := NewPex(10)
+
+    f := p.Peerlist.RandomAll
+    if publicOnly {
+        f = p.Peerlist.RandomPublic
+    }
+
     // check without peers
     assert.NotNil(t, p.Peerlist.RandomAll(100))
     assert.Equal(t, len(p.Peerlist.RandomAll(100)), 0)
@@ -281,36 +344,90 @@ func TestRandomAll(t *testing.T) {
     // check with one peer
     p.AddPeer("112.32.32.14:10011")
     // 0 defaults to all peers
-    compareRandomAll(t, p, 0, []string{"112.32.32.14:10011"})
-    compareRandomAll(t, p, 1, []string{"112.32.32.14:10011"})
+    compareRandom(t, p, 0, []string{"112.32.32.14:10011"}, f)
+    compareRandom(t, p, 1, []string{"112.32.32.14:10011"}, f)
     // exceeding known peers is safe
-    compareRandomAll(t, p, 2, []string{"112.32.32.14:10011"})
+    compareRandom(t, p, 2, []string{"112.32.32.14:10011"}, f)
     // exceeding max peers is safe
-    compareRandomAll(t, p, 100, []string{"112.32.32.14:10011"})
+    compareRandom(t, p, 100, []string{"112.32.32.14:10011"}, f)
 
     // check with two peers
     p.AddPeer("112.32.32.14:20011")
-    // 0 defaults to all peers
     one := p.Peerlist.RandomAll(1)[0].String()
     if one != "112.32.32.14:10011" && one != "112.32.32.14:20011" {
         assert.Nil(t, nil)
     }
-    compareRandomAll(t, p, 0, []string{
+    // 0 defaults to all peers
+    compareRandom(t, p, 0, []string{
         "112.32.32.14:10011",
         "112.32.32.14:20011",
-    })
-    compareRandomAll(t, p, 2, []string{
+    }, f)
+    compareRandom(t, p, 2, []string{
         "112.32.32.14:10011",
         "112.32.32.14:20011",
-    })
-    compareRandomAll(t, p, 3, []string{
+    }, f)
+    compareRandom(t, p, 3, []string{
         "112.32.32.14:10011",
         "112.32.32.14:20011",
-    })
-    compareRandomAll(t, p, 100, []string{
+    }, f)
+    compareRandom(t, p, 100, []string{
         "112.32.32.14:10011",
         "112.32.32.14:20011",
-    })
+    }, f)
+
+    // check with 3 peers, one private
+    q, err := p.AddPeer("112.32.32.14:30011")
+    assert.Nil(t, err)
+    q.Private = true
+    if publicOnly {
+        // The private peer should never be included
+        compareRandom(t, p, 0, []string{
+            "112.32.32.14:10011",
+            "112.32.32.14:20011",
+        }, f)
+        compareRandom(t, p, 2, []string{
+            "112.32.32.14:10011",
+            "112.32.32.14:20011",
+        }, f)
+        compareRandom(t, p, 3, []string{
+            "112.32.32.14:10011",
+            "112.32.32.14:20011",
+        }, f)
+        compareRandom(t, p, 100, []string{
+            "112.32.32.14:10011",
+            "112.32.32.14:20011",
+        }, f)
+    } else {
+        // The private peer should be included
+        compareRandom(t, p, 0, []string{
+            "112.32.32.14:10011",
+            "112.32.32.14:20011",
+            "112.32.32.14:30011",
+        }, f)
+        compareRandom(t, p, 3, []string{
+            "112.32.32.14:10011",
+            "112.32.32.14:20011",
+            "112.32.32.14:30011",
+        }, f)
+        compareRandom(t, p, 4, []string{
+            "112.32.32.14:10011",
+            "112.32.32.14:20011",
+            "112.32.32.14:30011",
+        }, f)
+        compareRandom(t, p, 100, []string{
+            "112.32.32.14:10011",
+            "112.32.32.14:20011",
+            "112.32.32.14:30011",
+        }, f)
+    }
+}
+
+func TestRandomAll(t *testing.T) {
+    testRandom(t, true)
+}
+
+func TestRandomPublic(t *testing.T) {
+    testRandom(t, false)
 }
 
 func TestGetPeer(t *testing.T) {
@@ -323,13 +440,13 @@ func TestGetPeer(t *testing.T) {
 
 func TestFull(t *testing.T) {
     p := NewPex(1)
-    assert.Equal(t, p.Full(), false)
+    assert.False(t, p.Full())
     p.AddPeer("112.32.32.14:10011")
-    assert.Equal(t, p.Full(), true)
+    assert.True(t, p.Full())
     // No limit
     p = NewPex(0)
     p.AddPeer("112.32.32.14:10011")
-    assert.Equal(t, p.Full(), false)
+    assert.False(t, p.Full())
 }
 
 func TestAddPeerLocalhost(t *testing.T) {
@@ -372,7 +489,7 @@ func TestAddPeer(t *testing.T) {
     assert.NotNil(t, repeer)
     assert.Equal(t, peer, repeer)
     assert.Equal(t, repeer.String(), "112.32.32.14:10011")
-    assert.Equal(t, repeer.LastSeen.After(past), true)
+    assert.True(t, repeer.LastSeen.After(past))
 
     assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
 
@@ -386,34 +503,49 @@ func TestAddPeer(t *testing.T) {
 }
 
 func TestSaveLoad(t *testing.T) {
+    os.Remove("./" + PeerDatabaseFilename)
+    os.Remove("./" + BlacklistedDatabaseFilename)
     defer os.Remove("./" + PeerDatabaseFilename)
     defer os.Remove("./" + BlacklistedDatabaseFilename)
     p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
     x, _ := p.AddPeer("112.32.32.14:20011")
     x.LastSeen = time.Time{}
+    privAddr := "112.32.32.14:30011"
+    y, err := p.AddPeer(privAddr)
+    assert.Nil(t, err)
+    y.Private = true
     // bypass AddPeer to add a blacklist and normal address at the same time
     // saving this and reloading it should cause the address to be
     // blacklisted only
     bad := "111.44.44.22:11021"
     p.Peerlist[bad] = NewPeer(bad)
     p.AddBlacklistEntry(bad, time.Hour)
-    err := p.Save("./")
-    assert.Nil(t, err)
+    // Do similar for the private peer, it should be rejected from the
+    // blacklist
+    p.Blacklist[privAddr] = BlacklistEntry{Now(), time.Hour}
+
+    assert.Nil(t, p.Save("./"))
 
     q := NewPex(10)
-    err = q.Load("./")
-    assert.Nil(t, err)
-    assert.NotNil(t, q.Peerlist["112.32.32.14:10011"])
-    assert.NotNil(t, q.Peerlist["112.32.32.14:20011"])
-    assert.True(t, q.Peerlist["112.32.32.14:20011"].LastSeen.IsZero())
-    assert.False(t, q.Peerlist["112.32.32.14:10011"].LastSeen.IsZero())
-    assert.Equal(t, len(q.Peerlist), 2)
+    assert.Nil(t, q.Load("./"))
     assert.Nil(t, q.Peerlist[bad])
     _, exists := q.Blacklist[bad]
-    assert.Equal(t, exists, true)
-
-    // TODO -- any way to force os.Create or f.WriteString to return an error?
+    assert.True(t, exists)
+    _, exists = q.Blacklist[privAddr]
+    assert.False(t, exists)
+    assert.Equal(t, len(q.Blacklist), 1)
+    assert.Equal(t, len(q.Peerlist), 3)
+    assert.NotNil(t, q.Peerlist["112.32.32.14:10011"])
+    assert.NotNil(t, q.Peerlist["112.32.32.14:20011"])
+    assert.NotNil(t, q.Peerlist[privAddr])
+    assert.True(t, q.Peerlist["112.32.32.14:20011"].LastSeen.IsZero())
+    assert.False(t, q.Peerlist["112.32.32.14:10011"].LastSeen.IsZero())
+    assert.False(t, q.Peerlist[privAddr].LastSeen.IsZero())
+    assert.False(t, q.Peerlist["112.32.32.14:10011"].Private)
+    assert.False(t, q.Peerlist["112.32.32.14:20011"].Private)
+    assert.True(t, q.Peerlist[privAddr].Private)
+    assert.Equal(t, len(q.Peerlist), 3)
 }
 
 /* Addendum: dummies & mocks */

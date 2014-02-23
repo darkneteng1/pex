@@ -460,19 +460,20 @@ func (self *Pex) Load(dir string) error {
     if err != nil {
         return err
     }
-    self.Peerlist = peerlist
-    self.Blacklist = blacklist
     // Remove any peers that appear in the blacklist, if not private
     for addr, _ := range blacklist {
-        p := self.Peerlist[addr]
+        p := peerlist[addr]
         if p != nil && p.Private {
             logger.Warning("Peer %s appears in both peerlist and blacklist, "+
                 "but is private.", addr)
-        } else {
-            delete(self.Peerlist, addr)
+            delete(blacklist, addr)
+            continue
         }
+        delete(peerlist, addr)
     }
-    return err
+    self.Peerlist = peerlist
+    self.Blacklist = blacklist
+    return nil
 }
 
 // Saves both the normal peer and blacklisted peer databases to dir
