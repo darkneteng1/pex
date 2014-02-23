@@ -2,7 +2,6 @@ package pex
 
 import (
     "bufio"
-    "fmt"
     "github.com/op/go-logging"
     "github.com/stretchr/testify/assert"
     "io/ioutil"
@@ -216,29 +215,6 @@ func TestAddBlacklistEntry(t *testing.T) {
     assert.Equal(t, exists, false)
 }
 
-func TestSetMaxPeers(t *testing.T) {
-    p := NewPex(10)
-    p.SetMaxPeers(20)
-    assert.Equal(t, p.maxPeers, 20)
-
-    // test truncating the peers map
-    for i := 0; i < 20; i++ {
-        p.AddPeer(fmt.Sprintf("112.32.32.14:%d", i+6000))
-    }
-    assert.Equal(t, len(p.Peerlist), 20)
-    p.SetMaxPeers(10)
-    assert.Equal(t, len(p.Peerlist), 10)
-
-    // setting invalid raises panic
-    defer func() {
-        if r := recover(); r == nil {
-            // we should have caught a panic
-            assert.NotNil(t, nil)
-        }
-    }()
-    p.SetMaxPeers(-1)
-}
-
 func TestAddPeers(t *testing.T) {
     p := NewPex(10)
     peers := make([]string, 4)
@@ -267,11 +243,11 @@ func TestClearOld(t *testing.T) {
     assert.NotNil(t, p.Peerlist["112.32.32.14:10011"])
 }
 
-func TestGetAddresses(t *testing.T) {
+func TestGetAllAddresses(t *testing.T) {
     p := NewPex(10)
     p.AddPeer("112.32.32.14:10011")
     p.AddPeer("112.32.32.14:20011")
-    addresses := p.Peerlist.GetAddresses()
+    addresses := p.Peerlist.GetAllAddresses()
     assert.Equal(t, len(addresses), 2)
     sort.Strings(addresses)
     assert.Equal(t, addresses, []string{
@@ -288,50 +264,50 @@ func convertPeersToStrings(peers []*Peer) []string {
     return addresses
 }
 
-func compareRandomPeers(t *testing.T, p *Pex, npeers int,
+func compareRandomAll(t *testing.T, p *Pex, npeers int,
     result []string) {
-    peers := p.Peerlist.Random(npeers)
+    peers := p.Peerlist.RandomAll(npeers)
     addresses := convertPeersToStrings(peers)
     sort.Strings(addresses)
     assert.Equal(t, addresses, result)
 }
 
-func TestRandomPeers(t *testing.T) {
+func TestRandomAll(t *testing.T) {
     p := NewPex(10)
     // check without peers
-    assert.NotNil(t, p.Peerlist.Random(100))
-    assert.Equal(t, len(p.Peerlist.Random(100)), 0)
+    assert.NotNil(t, p.Peerlist.RandomAll(100))
+    assert.Equal(t, len(p.Peerlist.RandomAll(100)), 0)
 
     // check with one peer
     p.AddPeer("112.32.32.14:10011")
     // 0 defaults to all peers
-    compareRandomPeers(t, p, 0, []string{"112.32.32.14:10011"})
-    compareRandomPeers(t, p, 1, []string{"112.32.32.14:10011"})
+    compareRandomAll(t, p, 0, []string{"112.32.32.14:10011"})
+    compareRandomAll(t, p, 1, []string{"112.32.32.14:10011"})
     // exceeding known peers is safe
-    compareRandomPeers(t, p, 2, []string{"112.32.32.14:10011"})
+    compareRandomAll(t, p, 2, []string{"112.32.32.14:10011"})
     // exceeding max peers is safe
-    compareRandomPeers(t, p, 100, []string{"112.32.32.14:10011"})
+    compareRandomAll(t, p, 100, []string{"112.32.32.14:10011"})
 
     // check with two peers
     p.AddPeer("112.32.32.14:20011")
     // 0 defaults to all peers
-    one := p.Peerlist.Random(1)[0].String()
+    one := p.Peerlist.RandomAll(1)[0].String()
     if one != "112.32.32.14:10011" && one != "112.32.32.14:20011" {
         assert.Nil(t, nil)
     }
-    compareRandomPeers(t, p, 0, []string{
+    compareRandomAll(t, p, 0, []string{
         "112.32.32.14:10011",
         "112.32.32.14:20011",
     })
-    compareRandomPeers(t, p, 2, []string{
+    compareRandomAll(t, p, 2, []string{
         "112.32.32.14:10011",
         "112.32.32.14:20011",
     })
-    compareRandomPeers(t, p, 3, []string{
+    compareRandomAll(t, p, 3, []string{
         "112.32.32.14:10011",
         "112.32.32.14:20011",
     })
-    compareRandomPeers(t, p, 100, []string{
+    compareRandomAll(t, p, 100, []string{
         "112.32.32.14:10011",
         "112.32.32.14:20011",
     })
@@ -350,7 +326,9 @@ func TestFull(t *testing.T) {
     assert.Equal(t, p.Full(), false)
     p.AddPeer("112.32.32.14:10011")
     assert.Equal(t, p.Full(), true)
-    p.SetMaxPeers(0)
+    // No limit
+    p = NewPex(0)
+    p.AddPeer("112.32.32.14:10011")
     assert.Equal(t, p.Full(), false)
 }
 
